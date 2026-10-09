@@ -196,6 +196,27 @@ useEffect(() => {
       setClients(clientsData as Client[]);
     }
   }
+
+  }
+};
+
+  fetchSalonData();
+
+  const channel = supabase
+    .channel('bookings-changes')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'bookings' },
+      (payload) => {
+        setAppointments((prev) => [payload.new as Appointment, ...prev]);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 const addAppointment = async (newAppointment: Omit<Appointment, 'id' | 'reminderStatus'>) => {
   // 1. إرسال الحجز إلى قاعدة بيانات Supabase
   const { data, error } = await supabase
@@ -221,26 +242,6 @@ const addAppointment = async (newAppointment: Omit<Appointment, 'id' | 'reminder
   if (data && data.length > 0) {
     const savedAppointment = data[0];
     setAppointments((prev) => [savedAppointment, ...prev]);
-  }
-};
-
-  fetchSalonData();
-
-  const channel = supabase
-    .channel('bookings-changes')
-    .on(
-      'postgres_changes',
-      { event: 'INSERT', schema: 'public', table: 'bookings' },
-      (payload) => {
-        setAppointments((prev) => [payload.new as Appointment, ...prev]);
-      }
-    )
-    .subscribe();
-
-  return () => {
-    supabase.removeChannel(channel);
-  };
-}, []);
 
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>(() => {
     try {
