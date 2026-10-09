@@ -1,0 +1,6 @@
+{
+  "name": "FadeCraft Barber Studio SaaS",
+  "description": "Modern barber salon management SaaS with booking system, customer profile management, and automated appointment reminders.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
