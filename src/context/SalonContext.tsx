@@ -214,33 +214,7 @@ useEffect(() => {
     supabase.removeChannel(channel);
   };
 }, []);
-const addAppointment = async (newAppointment: Omit<Appointment, 'id' | 'reminderStatus'>) => {
-  // 1. إرسال الحجز إلى قاعدة بيانات Supabase
-  const { data, error } = await supabase
-    .from('bookings')
-    .insert([
-      {
-        client_name: newAppointment.clientName,
-        client_phone: newAppointment.clientPhone,
-        service_name: newAppointment.serviceName,
-        price: newAppointment.price,
-        barber_id: newAppointment.barberId,
-        status: newAppointment.status || 'scheduled'
-      }
-    ])
-    .select();
 
-  if (error) {
-    console.error('Error adding appointment to Supabase:', error);
-    return;
-   }
-  };
-
-  // 2. تحديث الحجوزات في الواجهة فورًا بالبيانات المرجعة من Supabase
-  if (data && data.length > 0) {
-    const savedAppointment = data[0];
-    setAppointments((prev) => [savedAppointment, ...prev]);
-  }
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.LOGS);
