@@ -363,8 +363,27 @@ useEffect(() => {
     setToasts((prev) => prev.filter((t) => t.id !== id));
   };
 
-  const addAppointment = (appointmentData: Omit<Appointment, 'id' | 'reminderStatus'>) => {
-    const newId = 'apt-' + Date.now();
+  const addAppointment = async (appointmentData: Omit<Appointment, 'id' | 'reminderStatus'>) => {
+  const barberNum = Number(appointmentData.barberId);
+  const { data, error } = await supabase
+    .from('bookings')
+    .insert([{
+      client_name: appointmentData.clientName,
+      client_phone: appointmentData.clientPhone,
+      service_name: appointmentData.serviceName,
+      price: appointmentData.price,
+      barber_id: Number.isFinite(barberNum) ? barberNum : null,
+      chair_number: appointmentData.chairNumber,
+      status: appointmentData.status,
+    }])
+    .select()
+    .single();
+
+  if (error || !data) {
+    console.error('insert booking:', error);
+    return;
+  }
+  const newId = String(data.id);
     const newAppointment: Appointment = {
       ...appointmentData,
       id: newId,
