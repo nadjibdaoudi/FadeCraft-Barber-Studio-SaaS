@@ -177,6 +177,22 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 useEffect(() => {
   async function fetchSalonData() {
+  const channel = supabase
+    .channel('schema-db-changes')
+    .on(
+      'postgres_changes',
+      { event: 'INSERT', schema: 'public', table: 'bookings' },
+      (payload) => {
+        setAppointments((prev) => [payload.new, ...prev]);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
+
     // 1. جلب الحجوزات
     const { data: bookingsData, error: bookingsError } = await supabase
       .from('bookings')
