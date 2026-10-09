@@ -175,6 +175,29 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       return INITIAL_AUTOMATIONS;
     }
   });
+useEffect(() => {
+  async function fetchSalonData() {
+    // 1. جلب الحجوزات
+    const { data: bookingsData, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    // 2. جلب العملاء
+    const { data: clientsData, error: clientsError } = await supabase
+      .from('clients')
+      .select('*');
+
+    if (!bookingsError && bookingsData) {
+      setAppointments(bookingsData);
+    }
+    if (!clientsError && clientsData) {
+      setClients(clientsData);
+    }
+  }
+
+  fetchSalonData();
+}, []);
 
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>(() => {
     try {
