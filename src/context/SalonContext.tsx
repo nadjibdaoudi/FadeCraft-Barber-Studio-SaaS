@@ -197,9 +197,6 @@ useEffect(() => {
     }
   }
 
-  }
-};
-
   fetchSalonData();
 
   const channel = supabase
@@ -242,7 +239,7 @@ const addAppointment = async (newAppointment: Omit<Appointment, 'id' | 'reminder
   if (data && data.length > 0) {
     const savedAppointment = data[0];
     setAppointments((prev) => [savedAppointment, ...prev]);
-
+  }
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>(() => {
     try {
       const saved = localStorage.getItem(LOCAL_STORAGE_KEYS.LOGS);
