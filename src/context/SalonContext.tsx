@@ -177,13 +177,35 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
   });
 useEffect(() => {
   async function fetchSalonData() {
+    const { data: bookingsData, error: bookingsError } = await supabase
+      .from('bookings')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    const { data: clientsData, error: clientsError } = await supabase
+      .from('clients')
+      .select('*');
+
+    if (bookingsError) console.error('bookings:', bookingsError);
+    if (clientsError) console.error('clients:', clientsError);
+
+    if (!bookingsError && bookingsData) {
+      setAppointments(bookingsData as Appointment[]);
+    }
+    if (!clientsError && clientsData) {
+      setClients(clientsData as Client[]);
+    }
+  }
+
+  fetchSalonData();
+
   const channel = supabase
-    .channel('schema-db-changes')
+    .channel('bookings-changes')
     .on(
       'postgres_changes',
       { event: 'INSERT', schema: 'public', table: 'bookings' },
       (payload) => {
-        setAppointments((prev) => [payload.new, ...prev]);
+        setAppointments((prev) => [payload.new as Appointment, ...prev]);
       }
     )
     .subscribe();
@@ -191,28 +213,6 @@ useEffect(() => {
   return () => {
     supabase.removeChannel(channel);
   };
-}, []);
-
-    // 1. جلب الحجوزات
-    const { data: bookingsData, error: bookingsError } = await supabase
-      .from('bookings')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    // 2. جلب العملاء
-    const { data: clientsData, error: clientsError } = await supabase
-      .from('clients')
-      .select('*');
-
-    if (!bookingsError && bookingsData) {
-      setAppointments(bookingsData);
-    }
-    if (!clientsError && clientsData) {
-      setClients(clientsData);
-    }
-  }
-
-  fetchSalonData();
 }, []);
 
   const [reminderLogs, setReminderLogs] = useState<ReminderLog[]>(() => {
