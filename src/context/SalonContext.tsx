@@ -233,7 +233,8 @@ const addAppointment = async (newAppointment: Omit<Appointment, 'id' | 'reminder
   if (error) {
     console.error('Error adding appointment to Supabase:', error);
     return;
-  }
+   }
+  };
 
   // 2. تحديث الحجوزات في الواجهة فورًا بالبيانات المرجعة من Supabase
   if (data && data.length > 0) {
