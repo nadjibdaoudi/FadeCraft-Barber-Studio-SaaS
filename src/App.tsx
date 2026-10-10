@@ -112,7 +112,6 @@ export default function App() {
   <ErrorBoundary>
     <MainContent />
   </ErrorBoundary>
-  ...
 </SalonProvider>
   );
 }
