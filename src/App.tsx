@@ -24,7 +24,27 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { CommandPalette } from './components/CommandPalette';
 import { NotificationToast } from './components/NotificationToast';
-
+class ErrorBoundary extends React.Component<
+  { children: React.ReactNode },
+  { error: Error | null }
+> {
+  state = { error: null as Error | null };
+  static getDerivedStateFromError(error: Error) {
+    return { error };
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <pre style={{ padding: 16, whiteSpace: 'pre-wrap', color: 'red' }}>
+          {this.state.error.message}
+          {'\n'}
+          {this.state.error.stack}
+        </pre>
+      );
+    }
+    return this.props.children;
+  }
+}
 const MainContent: React.FC = () => {
   const { activeTab } = useSalon();
 
@@ -89,7 +109,10 @@ const MainContent: React.FC = () => {
 export default function App() {
   return (
     <SalonProvider>
-      <MainContent />
-    </SalonProvider>
+  <ErrorBoundary>
+    <MainContent />
+  </ErrorBoundary>
+  ...
+</SalonProvider>
   );
 }
