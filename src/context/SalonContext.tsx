@@ -67,7 +67,7 @@ interface SalonContextType {
   addBarberBreak: (barberId: string, dayOfWeek: DayOfWeek, breakSlot: Omit<BreakSlot, 'id'>) => void;
   removeBarberBreak: (barberId: string, dayOfWeek: DayOfWeek, breakId: string) => void;
   updateBarberStatus: (barberId: string, status: Barber['status']) => void;
-
+  addBarber: (barber: { name: string; chairNumber: number; specialty?: string; avatarUrl?: string }) => void;
   // Inventory & Supply Management Actions
   inventory: InventoryItem[];
   lowStockCount: number;
@@ -1071,7 +1071,56 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       message: `${barber?.name || 'Barber'} is now marked as ${status.replace('_', ' ').toUpperCase()}.`
     });
   };
+ const addBarber = (data: { name: string; chairNumber: number; specialty?: string; avatarUrl?: string }) => {
+  const tempId = 'barber-tmp-' + Date.now();
+  const newBarber: Barber = {
+    id: tempId,
+    name: data.name,
+    chairNumber: data.chairNumber,
+    avatarUrl: data.avatarUrl || avatarFor(data.name),
+    specialty: data.specialty || '',
+    rating: 5,
+    cutsCompleted: 0,
+    status: 'active',
+    shifts: defaultShifts()
+  };
 
+  barbersRef.current = [...barbersRef.current, newBarber];
+  setBarbers(barbersRef.current);
+  addToast({
+    type: 'success',
+    title: 'Barber Added',
+    message: `${data.name} added to Chair #${data.chairNumber}.`
+  });
+
+  (async () => {
+    const { data: row, error } = await supabase
+      .from('barbers')
+      .insert([{
+        name: data.name,
+        chair_number: data.chairNumber,
+        avatar_url: data.avatarUrl || '',
+        specialty: data.specialty || '',
+        rating: 5,
+        cuts_completed: 0,
+        status: 'active',
+        is_available: true,
+        shifts: newBarber.shifts
+      }])
+      .select()
+      .single();
+
+    if (error || !row) {
+      barbersRef.current = barbersRef.current.filter((b) => b.id !== tempId);
+      setBarbers(barbersRef.current);
+      reportError('Saving barber failed', error);
+      return;
+    }
+    const saved = mapBarber(row);
+    barbersRef.current = barbersRef.current.map((b) => (b.id === tempId ? saved : b));
+    setBarbers(barbersRef.current);
+  })();
+};
   // ---- Inventory ----
 
   const addInventoryItem = (itemData: Omit<InventoryItem, 'id' | 'status'>) => {
@@ -1534,6 +1583,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         addBarberBreak,
         removeBarberBreak,
         updateBarberStatus,
+        addBarber,
         inventory,
         lowStockCount,
         addInventoryItem,
