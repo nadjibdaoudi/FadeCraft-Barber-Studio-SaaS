@@ -9,11 +9,18 @@ export const Header: React.FC = () => {
     setIsNewClientModalOpen,
     setIsCheckoutModalOpen,
     toasts,
-    appointments 
+    shop
   } = useSalon();
 
   const [showNotifications, setShowNotifications] = useState(false);
   const [showNewMenu, setShowNewMenu] = useState(false);
+
+  const shopName = shop?.name?.trim() || 'My Salon';
+  const dateLabel = new Date().toLocaleDateString('en-US', {
+    weekday: 'long',
+    month: 'long',
+    day: 'numeric'
+  });
 
   const getPageTitle = () => {
     switch (activeTab) {
@@ -42,9 +49,9 @@ export const Header: React.FC = () => {
           {getPageTitle()}
         </h1>
         <div className="flex items-center gap-2 text-xs text-slate-400 font-medium">
-          <span className="hidden sm:inline">Tuesday, September 29</span>
+          <span className="hidden sm:inline">{dateLabel}</span>
           <span aria-hidden="true">·</span>
-          <span>Keystone Flagship</span>
+          <span>{shopName}</span>
         </div>
       </div>
 
@@ -108,7 +115,9 @@ export const Header: React.FC = () => {
             title="Notifications & SMS alerts"
           >
             <Bell className="w-4 h-4" />
-            <span className="absolute top-2 right-2 w-2 h-2 bg-[#FEE500] rounded-full ring-2 ring-white" />
+            {toasts.length > 0 && (
+              <span className="absolute top-2 right-2 w-2 h-2 bg-[#FEE500] rounded-full ring-2 ring-white" />
+            )}
           </button>
 
           {showNotifications && (
@@ -157,14 +166,9 @@ export const Header: React.FC = () => {
         <div className="flex items-center gap-2 pl-2 border-l border-slate-200">
           <div className="relative">
             <img
-              src="/src/assets/images/barber_avatar_marcus_1790833013027.jpg"
-              alt="Marcus Vance"
-              referrerPolicy="no-referrer"
+              src={`https://ui-avatars.com/api/?name=${encodeURIComponent(shopName)}&background=161618&color=ffffff&size=100`}
+              alt={shopName}
               className="w-9 h-9 rounded-full object-cover ring-2 ring-slate-100"
-              onError={(e) => {
-                // Fallback avatar
-                (e.target as HTMLImageElement).src = 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
-              }}
             />
             <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 rounded-full ring-2 ring-white" />
           </div>

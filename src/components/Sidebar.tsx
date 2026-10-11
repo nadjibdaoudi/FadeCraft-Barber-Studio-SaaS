@@ -18,6 +18,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
+import { formatMoney, formatMoneyShort, revenueBetween, todayStr } from '../utils/metrics';
 
 export const Sidebar: React.FC = () => {
   const { 
@@ -27,21 +28,42 @@ export const Sidebar: React.FC = () => {
     clients,
     appointments,
     automations,
-    lowStockCount
+    lowStockCount,
+    invoices,
+    reminderLogs,
+    barbers,
+    shop
   } = useSalon();
 
   const totalClients = clients.length;
-  const todayAppointments = appointments.filter(a => a.date === '2026-09-29').length;
+  const today = todayStr();
+  const year = new Date().getFullYear();
+  const todayAppointments = appointments.filter(a => a.date === today && a.status !== 'cancelled').length;
   const activeAutomationsCount = automations.filter(a => a.active).length;
+
+  const todayRevenue = revenueBetween(invoices, today, today);
+  const remindersToday = reminderLogs.filter(
+    l => l.timestamp === 'Just now' || l.timestamp.slice(0, 10) === today
+  ).length;
+
+  const shopName = shop?.name?.trim() || 'My Salon';
+  const shopSubtitle = `${shop?.location ? shop.location + ' · ' : ''}${barbers.length} ${barbers.length === 1 ? 'chair' : 'chairs'}`;
+
+  const yearRevenue = revenueBetween(invoices, `${year}-01-01`, `${year}-12-31`);
+  const goal = shop?.revenueGoal || 0;
+  const goalPct = goal > 0 ? Math.min(100, Math.round((yearRevenue / goal) * 100)) : 0;
+  const upcomingCount = appointments.filter(
+    a => ['scheduled', 'confirmed', 'arrived', 'in_chair'].includes(a.status) && a.date >= today
+  ).length;
 
   const navItems = [
     { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { id: 'today', label: 'Today', icon: Clock },
     { id: 'clients', label: 'Clients', icon: Users, badge: totalClients.toString() },
     { id: 'bookings', label: 'Bookings & Chairs', icon: Scissors, badge: todayAppointments.toString() },
-    { id: 'billing', label: 'Billing & POS', icon: Receipt, badge: '$1.4k' },
+    { id: 'billing', label: 'Billing & POS', icon: Receipt, badge: todayRevenue > 0 ? formatMoneyShort(todayRevenue) : undefined },
     { id: 'calendar', label: 'Calendar', icon: Calendar },
-    { id: 'reminders', label: 'Reminders & SMS', icon: MessageSquare, badge: '3' },
+    { id: 'reminders', label: 'Reminders & SMS', icon: MessageSquare, badge: remindersToday > 0 ? remindersToday.toString() : undefined },
   ];
 
   const managementItems = [
@@ -59,11 +81,11 @@ export const Sidebar: React.FC = () => {
         <div className="flex items-center justify-between p-2 rounded-xl hover:bg-slate-200/50 transition-colors cursor-pointer group">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-black text-white flex items-center justify-center font-bold text-sm tracking-tight shadow-sm">
-              <span>K</span>
+              <span>{shopName.charAt(0).toUpperCase()}</span>
             </div>
             <div className="flex flex-col text-left">
-              <span className="text-sm font-semibold text-slate-900 leading-tight">Keystone Barber</span>
-              <span className="text-[11px] text-slate-500 font-normal">Downtown · 6 chairs</span>
+              <span className="text-sm font-semibold text-slate-900 leading-tight">{shopName}</span>
+              <span className="text-[11px] text-slate-500 font-normal">{shopSubtitle}</span>
             </div>
           </div>
           <ChevronDown className="w-4 h-4 text-slate-400 group-hover:text-slate-600 transition-colors" />
@@ -185,24 +207,27 @@ export const Sidebar: React.FC = () => {
         </div>
       </div>
 
-      {/* Bottom Goal Widget (matching exact reference screenshot) */}
+      {/* Bottom Goal Widget */}
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs font-medium">
-          <span className="text-slate-500">2026 Monthly Goal</span>
-          <span className="text-slate-900 font-bold font-mono">78%</span>
+          <span className="text-slate-500">{year} Revenue Goal</span>
+          <span className="text-slate-900 font-bold font-mono">{goal > 0 ? `${goalPct}%` : '—'}</span>
         </div>
         <div className="flex items-baseline gap-1">
           <span className="text-base font-bold text-slate-900 font-mono tabular-nums tracking-tight">
-            $18,420
+            {formatMoney(yearRevenue)}
           </span>
-          <span className="text-xs text-slate-400 font-normal">of $24.0k</span>
+          <span className="text-xs text-slate-400 font-normal">
+            {goal > 0 ? `of ${formatMoneyShort(goal)}` : 'no goal set'}
+          </span>
         </div>
-        {/* Yellow-highlighted progress bar matching image */}
         <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden flex">
-          <div className="bg-[#FEE500] h-full rounded-full transition-all duration-500" style={{ width: '78%' }} />
+          <div className="bg-[#FEE500] h-full rounded-full transition-all duration-500" style={{ width: `${goalPct}%` }} />
         </div>
         <span className="text-[10px] text-slate-400">
-          $5,580 to go · 4 chair days pending
+          {goal > 0
+            ? `${formatMoney(Math.max(goal - yearRevenue, 0))} to go · ${upcomingCount} upcoming appts`
+            : 'Set a goal from the Dashboard'}
         </span>
       </div>
     </aside>
