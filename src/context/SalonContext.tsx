@@ -939,7 +939,22 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       message: `Updated barber formula specs for ${updated?.name || selectedClient?.name || 'client'}.`
     });
   };
-
+  const deleteClient = (clientId: string) => {
+  const c = clientsRef.current.find((x) => x.id === clientId);
+  const list = clientsRef.current.filter((x) => x.id !== clientId);
+  clientsRef.current = list;
+  setClients(list);
+  setSelectedClient((cur) => (cur && cur.id === clientId ? null : cur));
+  const n = dbId(clientId);
+  if (n !== null) {
+    void run('Deleting client', supabase.from('clients').delete().eq('id', n));
+  }
+  addToast({
+    type: 'info',
+    title: 'Client Removed',
+    message: `${c?.name || 'Client'} was removed from the directory.`
+  });
+};
   // ---- Automations & reminders ----
 
   const toggleAutomationRule = (ruleId: string) => {
