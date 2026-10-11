@@ -31,6 +31,7 @@ export const BarbersView: React.FC = () => {
     removeBarberBreak,
     updateBarberStatus,
     updateBarberShifts,
+    addBarber,
     addToast 
   } = useSalon();
 
@@ -46,6 +47,12 @@ export const BarbersView: React.FC = () => {
 
   // State for Full Weekly Schedule Editor Modal
   const [editingBarber, setEditingBarber] = useState<Barber | null>(null);
+
+  // State for the Add Barber modal
+  const [isAddBarberOpen, setIsAddBarberOpen] = useState(false);
+  const [newBarberName, setNewBarberName] = useState('');
+  const [newBarberChair, setNewBarberChair] = useState('');
+  const [newBarberSpecialty, setNewBarberSpecialty] = useState('');
 
   // Helper to calculate total shift duration minus breaks in hours
   const calculateWorkingHours = (shift: DayShift): string => {
@@ -76,6 +83,23 @@ export const BarbersView: React.FC = () => {
   }).length;
 
   const onBreakCount = barbers.filter(b => b.status === 'on_break').length;
+
+  const openAddBarber = () => {
+    const nextChair = barbers.reduce((m, b) => Math.max(m, b.chairNumber || 0), 0) + 1;
+    setNewBarberName('');
+    setNewBarberSpecialty('');
+    setNewBarberChair(String(nextChair));
+    setIsAddBarberOpen(true);
+  };
+
+  const handleAddBarber = (e: React.FormEvent) => {
+    e.preventDefault();
+    const name = newBarberName.trim();
+    const chair = parseInt(newBarberChair, 10);
+    if (!name || !Number.isFinite(chair) || chair < 1) return;
+    addBarber({ name, chairNumber: chair, specialty: newBarberSpecialty.trim() });
+    setIsAddBarberOpen(false);
+  };
 
   const handleSaveAddBreak = (barberId: string) => {
     if (!newBreakStart || !newBreakEnd) return;
@@ -162,6 +186,15 @@ export const BarbersView: React.FC = () => {
             Barber Profiles
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={openAddBarber}
+          className="px-4 py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-xs flex items-center justify-center gap-2 self-start xl:self-auto"
+        >
+          <Plus className="w-3.5 h-3.5" />
+          <span>Add Barber</span>
+        </button>
       </div>
 
       {/* KPI Highlights Strip */}
@@ -946,6 +979,80 @@ export const BarbersView: React.FC = () => {
               </button>
             </div>
           </div>
+        </div>
+      )}
+
+      {/* ADD BARBER MODAL */}
+      {isAddBarberOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs">
+          <form
+            onSubmit={handleAddBarber}
+            className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-md flex flex-col overflow-hidden"
+          >
+            <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <h3 className="text-base font-bold text-slate-900">Add Barber</h3>
+              <button
+                type="button"
+                onClick={() => setIsAddBarberOpen(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-900 rounded-lg"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 flex flex-col gap-4">
+              <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
+                Full name
+                <input
+                  type="text"
+                  value={newBarberName}
+                  onChange={(e) => setNewBarberName(e.target.value)}
+                  required
+                  autoFocus
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
+                Chair number
+                <input
+                  type="number"
+                  min={1}
+                  value={newBarberChair}
+                  onChange={(e) => setNewBarberChair(e.target.value)}
+                  required
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </label>
+
+              <label className="flex flex-col gap-1.5 text-xs font-semibold text-slate-600">
+                Specialty (optional)
+                <input
+                  type="text"
+                  value={newBarberSpecialty}
+                  onChange={(e) => setNewBarberSpecialty(e.target.value)}
+                  placeholder="e.g. Skin fades, beard design"
+                  className="px-3 py-2.5 rounded-xl border border-slate-200 text-sm font-normal text-slate-900 focus:outline-none focus:ring-2 focus:ring-black/10"
+                />
+              </label>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50/50">
+              <button
+                type="button"
+                onClick={() => setIsAddBarberOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-slate-600 hover:text-slate-900"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                className="px-5 py-2.5 bg-black text-white text-xs font-bold rounded-xl hover:bg-slate-800 transition-colors shadow-xs"
+              >
+                Save Barber
+              </button>
+            </div>
+          </form>
         </div>
       )}
 
