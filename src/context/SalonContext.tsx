@@ -39,7 +39,12 @@ export interface ShopSettings {
   location: string;
   chairsCount: number;
   revenueGoal: number;
+  operatingHours: string;
+  smsSenderId: string;
+  whatsappEnabled: boolean;
 }
+
+export type ShopSettingsUpdate = Partial<Omit<ShopSettings, 'id' | 'chairsCount'>>;
 
 interface Toast {
   id: string;
@@ -74,6 +79,7 @@ interface SalonContextType {
   // Shop settings & expenses (feed Dashboard and Analytics)
   shop: ShopSettings | null;
   setRevenueGoal: (goal: number) => void;
+  updateShopSettings: (updates: ShopSettingsUpdate) => void;
   expenses: Expense[];
   addExpense: (expense: Omit<Expense, 'id'>) => void;
   deleteExpense: (expenseId: string) => void;
@@ -529,7 +535,10 @@ const mapShop = (r: Row): ShopSettings => ({
   name: r.name ?? '',
   location: r.location ?? '',
   chairsCount: r.chairs_count ?? 0,
-  revenueGoal: Number(r.revenue_goal ?? 0)
+  revenueGoal: Number(r.revenue_goal ?? 0),
+  operatingHours: r.operating_hours ?? '',
+  smsSenderId: r.sms_sender_id ?? '',
+  whatsappEnabled: !!r.whatsapp_enabled
 });
 
 // ---------------------------------------------------------------------
@@ -1550,38 +1559,67 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
 
   // ---- Shop settings & expenses ----
 
-  const setRevenueGoal = (goal: number) => {
-    if (!Number.isFinite(goal) || goal <= 0) return;
+  const updateShopSettings = (updates: ShopSettingsUpdate) => {
     const current = shop;
+
+    const row: Row = {};
+    if (updates.name !== undefined) row.name = updates.name;
+    if (updates.location !== undefined) row.location = updates.location;
+    if (updates.revenueGoal !== undefined) row.revenue_goal = updates.revenueGoal;
+    if (updates.operatingHours !== undefined) row.operating_hours = updates.operatingHours;
+    if (updates.smsSenderId !== undefined) row.sms_sender_id = updates.smsSenderId;
+    if (updates.whatsappEnabled !== undefined) row.whatsapp_enabled = updates.whatsappEnabled;
+    if (Object.keys(row).length === 0) return;
+
     setShop({
       id: current?.id ?? null,
       name: current?.name ?? '',
       location: current?.location ?? '',
       chairsCount: current?.chairsCount ?? 0,
-      revenueGoal: goal
+      revenueGoal: current?.revenueGoal ?? 0,
+      operatingHours: current?.operatingHours ?? '',
+      smsSenderId: current?.smsSenderId ?? '',
+      whatsappEnabled: current?.whatsappEnabled ?? false,
+      ...updates
     });
 
     (async () => {
       if (current && current.id !== null) {
-        const ok = await run(
-          'Saving revenue goal',
-          supabase.from('shops').update({ revenue_goal: goal }).eq('id', current.id)
-        );
-        if (ok) addToast({ type: 'success', title: 'Goal Saved', message: `Yearly revenue goal set to $${goal.toLocaleString('en-US')}.` });
+        const ok = await run('Saving settings', supabase.from('shops').update(row).eq('id', current.id));
+        if (ok) {
+          addToast({
+            type: 'success',
+            title: 'Settings Saved',
+            message: 'Salon settings were saved.'
+          });
+        } else {
+          await reloadRef.current();
+        }
         return;
       }
+
       const { data, error } = await supabase
         .from('shops')
-        .insert([{ name: 'My Salon', revenue_goal: goal }])
+        .insert([{ name: 'My Salon', ...row }])
         .select()
         .single();
       if (error || !data) {
-        reportError('Saving revenue goal failed', error);
+        reportError('Saving settings failed', error);
+        await reloadRef.current();
         return;
       }
       setShop(mapShop(data));
-      addToast({ type: 'success', title: 'Goal Saved', message: `Yearly revenue goal set to $${goal.toLocaleString('en-US')}.` });
+      addToast({
+        type: 'success',
+        title: 'Settings Saved',
+        message: 'Salon settings were saved.'
+      });
     })();
+  };
+
+  const setRevenueGoal = (goal: number) => {
+    if (!Number.isFinite(goal) || goal <= 0) return;
+    updateShopSettings({ revenueGoal: goal });
   };
 
   const addExpense = (data: Omit<Expense, 'id'>) => {
@@ -1795,6 +1833,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         refreshData,
         shop,
         setRevenueGoal,
+        updateShopSettings,
         expenses,
         addExpense,
         deleteExpense,
