@@ -1526,6 +1526,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
         updateAppointmentStatus,
         addClient,
         updateClientNotes,
+        deleteClient,
         toggleAutomationRule,
         sendSimulatedReminder,
         updateBarberShifts,
