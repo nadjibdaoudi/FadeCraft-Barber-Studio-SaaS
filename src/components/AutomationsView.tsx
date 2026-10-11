@@ -31,12 +31,12 @@ export const AutomationsView: React.FC = () => {
 
   const activeRule = automations.find((r) => r.id === selectedRuleId) || automations[0];
   const testClient = clients.find((c) => c.id === testClientId) || clients[0];
-  const testAppointment = appointments.find((a) => a.clientId === testClient.id) || appointments[0];
+  const testAppointment = appointments.find((a) => a.clientId === testClient?.id) || appointments[0];
 
   // Generate preview text replacing variables
   const formatTemplatePreview = (template: string) => {
     return template
-      .replace(/{client_name}/g, testClient.name)
+      .replace(/{client_name}/g, testClient?.name || 'Client')
       .replace(/{barber_name}/g, testAppointment?.barberName || 'Marcus Vance')
       .replace(/{service_name}/g, testAppointment?.serviceName || 'Signature Skin Fade')
       .replace(/{appointment_time}/g, testAppointment?.time || '14:30')
@@ -46,7 +46,7 @@ export const AutomationsView: React.FC = () => {
   };
 
   const handleTestSend = () => {
-    if (testAppointment) {
+    if (testAppointment && activeRule) {
       sendSimulatedReminder(testAppointment.id, selectedChannel, activeRule.title);
     }
   };
@@ -254,7 +254,7 @@ export const AutomationsView: React.FC = () => {
                     : 'bg-slate-800 text-slate-100 rounded-tl-xs self-start border border-slate-700'
                 }`}
               >
-                {formatTemplatePreview(activeRule.templateMessage)}
+                {activeRule ? formatTemplatePreview(activeRule.templateMessage) : ''}
                 <div className="flex items-center justify-end gap-1 mt-1.5 text-[9px] text-slate-400 font-mono">
                   <span>14:30</span>
                   <CheckCircle2 className="w-3 h-3 text-emerald-400" />
@@ -274,7 +274,7 @@ export const AutomationsView: React.FC = () => {
               className="mt-2 w-full py-2.5 bg-[#FEE500] hover:bg-[#FEE500]/90 text-black font-bold text-xs rounded-xl flex items-center justify-center gap-1.5 transition-colors shadow-xs"
             >
               <Send className="w-3.5 h-3.5" />
-              <span>Simulate Real Dispatch to {testClient.name.split(' ')[0]}</span>
+              <span>Simulate Real Dispatch to {(testClient?.name || 'Client').split(' ')[0]}</span>
             </button>
           </div>
         </div>
