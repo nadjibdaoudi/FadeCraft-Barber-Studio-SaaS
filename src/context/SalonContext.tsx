@@ -42,6 +42,7 @@ export interface ShopSettings {
   operatingHours: string;
   smsSenderId: string;
   whatsappEnabled: boolean;
+  taxRate: number; // percent applied at checkout
 }
 
 export type ShopSettingsUpdate = Partial<Omit<ShopSettings, 'id' | 'chairsCount'>>;
@@ -538,7 +539,8 @@ const mapShop = (r: Row): ShopSettings => ({
   revenueGoal: Number(r.revenue_goal ?? 0),
   operatingHours: r.operating_hours ?? '',
   smsSenderId: r.sms_sender_id ?? '',
-  whatsappEnabled: !!r.whatsapp_enabled
+  whatsappEnabled: !!r.whatsapp_enabled,
+  taxRate: Number(r.tax_rate ?? 0)
 });
 
 // ---------------------------------------------------------------------
@@ -1569,6 +1571,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
     if (updates.operatingHours !== undefined) row.operating_hours = updates.operatingHours;
     if (updates.smsSenderId !== undefined) row.sms_sender_id = updates.smsSenderId;
     if (updates.whatsappEnabled !== undefined) row.whatsapp_enabled = updates.whatsappEnabled;
+    if (updates.taxRate !== undefined) row.tax_rate = updates.taxRate;
     if (Object.keys(row).length === 0) return;
 
     setShop({
@@ -1580,6 +1583,7 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       operatingHours: current?.operatingHours ?? '',
       smsSenderId: current?.smsSenderId ?? '',
       whatsappEnabled: current?.whatsappEnabled ?? false,
+      taxRate: current?.taxRate ?? 0,
       ...updates
     });
 
@@ -1731,9 +1735,9 @@ export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) =
       tipAmount,
       totalAmount: updatedTotal,
       paymentDetails: {
-        cardBrand: paymentMethod === 'apple_pay' ? 'Apple Pay' : paymentMethod === 'card' ? 'Visa' : 'Cash',
-        cardLast4: paymentMethod === 'cash' ? undefined : '5521',
-        transactionRef: `tx_live_${Math.random().toString(36).substring(2, 9)}`
+        cardBrand: paymentMethod === 'apple_pay' ? 'Apple Pay' : paymentMethod === 'card' ? 'Card' : 'Cash',
+        cardLast4: undefined,
+        transactionRef: `pos_${Math.random().toString(36).substring(2, 9)}`
       }
     };
 
