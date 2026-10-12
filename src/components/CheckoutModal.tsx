@@ -32,7 +32,8 @@ export const CheckoutModal: React.FC = () => {
     adjustInventoryStock,
     createInvoice,
     setSelectedInvoice,
-    setIsReceiptModalOpen
+    setIsReceiptModalOpen,
+    shop
   } = useSalon();
 
   const [selectedClientId, setSelectedClientId] = useState<string>('');
@@ -43,54 +44,72 @@ export const CheckoutModal: React.FC = () => {
   const [lineItems, setLineItems] = useState<BillingLineItem[]>([]);
   const [selectedServiceToAdd, setSelectedServiceToAdd] = useState<string>('');
   const [selectedProductToAdd, setSelectedProductToAdd] = useState<string>('');
-  const [tipPercent, setTipPercent] = useState<number | 'custom'>(20);
+  const [tipPercent, setTipPercent] = useState<number | 'custom'>(0);
   const [customTip, setCustomTip] = useState<string>('');
   const [discountAmount, setDiscountAmount] = useState<number>(0);
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('card');
-  const [sendReceiptViaSms, setSendReceiptViaSms] = useState<boolean>(true);
+  const [sendReceiptViaSms, setSendReceiptViaSms] = useState<boolean>(false);
   const [notes, setNotes] = useState<string>('');
+  // Maps a retail line item to its inventory product, so stock is only reduced when the sale is paid
+  const [productIds, setProductIds] = useState<Record<string, string>>({});
+
+  const resetForm = () => {
+    setSelectedClientId('');
+    setGuestName('');
+    setGuestPhone('');
+    setSelectedBarberId('');
+    setChairNumber(1);
+    setLineItems([]);
+    setProductIds({});
+    setSelectedServiceToAdd('');
+    setSelectedProductToAdd('');
+    setTipPercent(0);
+    setCustomTip('');
+    setDiscountAmount(0);
+    setPaymentMethod('card');
+    setSendReceiptViaSms(false);
+    setNotes('');
+  };
+
+  const handleClose = () => {
+    resetForm();
+    setCheckoutAppointment(null);
+    setIsCheckoutModalOpen(false);
+  };
 
   // Prefill when checkoutAppointment is provided
   useEffect(() => {
+    if (!isCheckoutModalOpen) return;
+
     if (checkoutAppointment) {
-      setSelectedClientId(checkoutAppointment.clientId);
-      setSelectedBarberId(checkoutAppointment.barberId);
-      setChairNumber(checkoutAppointment.chairNumber);
-      
-      const matchedService = services.find(s => s.id === checkoutAppointment.serviceId);
-      if (matchedService) {
-        setLineItems([
-          {
-            id: 'item-' + Date.now(),
-            type: 'service',
-            name: matchedService.name,
-            quantity: 1,
-            unitPrice: matchedService.price,
-            total: matchedService.price
-          }
-        ]);
-      }
-    } else {
-      // Default to first client & barber
-      if (clients.length > 0 && !selectedClientId) {
-        setSelectedClientId(clients[0].id);
-      }
-      if (barbers.length > 0 && !selectedBarberId) {
-        setSelectedBarberId(barbers[0].id);
-        setChairNumber(barbers[0].chairNumber);
-      }
-      if (services.length > 0 && lineItems.length === 0) {
-        setLineItems([
-          {
-            id: 'item-' + Date.now(),
-            type: 'service',
-            name: services[0].name,
-            quantity: 1,
-            unitPrice: services[0].price,
-            total: services[0].price
-          }
-        ]);
-      }
+      const matchedClient =
+        clients.find((c) => c.id === checkoutAppointment.clientId) ||
+        clients.find((c) => !!checkoutAppointment.clientPhone && c.phone === checkoutAppointment.clientPhone);
+      setSelectedClientId(matchedClient ? matchedClient.id : '');
+      setGuestName(matchedClient ? '' : checkoutAppointment.clientName);
+      setGuestPhone(matchedClient ? '' : checkoutAppointment.clientPhone);
+
+      const barber = barbers.find((b) => b.id === checkoutAppointment.barberId);
+      setSelectedBarberId(barber ? barber.id : barbers[0]?.id ?? '');
+      setChairNumber(barber ? barber.chairNumber : barbers[0]?.chairNumber ?? checkoutAppointment.chairNumber);
+
+      // Charge the price that was agreed when the booking was made
+      const matchedService = services.find((s) => s.id === checkoutAppointment.serviceId);
+      setLineItems([
+        {
+          id: 'item-' + Date.now(),
+          type: 'service',
+          name: matchedService ? matchedService.name : checkoutAppointment.serviceName,
+          quantity: 1,
+          unitPrice: checkoutAppointment.price,
+          total: checkoutAppointment.price
+        }
+      ]);
+      setProductIds({});
+    } else if (barbers.length > 0 && !selectedBarberId) {
+      // New charge: no customer or service is preselected
+      setSelectedBarberId(barbers[0].id);
+      setChairNumber(barbers[0].chairNumber);
     }
   }, [checkoutAppointment, isCheckoutModalOpen]);
 
@@ -101,7 +120,8 @@ export const CheckoutModal: React.FC = () => {
 
   // Financial calculations
   const subtotal = lineItems.reduce((acc, item) => acc + item.total, 0);
-  const taxAmount = Number((subtotal * 0.07).toFixed(2)); // 7% FL sales tax
+  const taxRate = shop?.taxRate ?? 0; // percent, set in Settings
+  const taxAmount = Number(((subtotal * taxRate) / 100).toFixed(2));
 
   let calculatedTip = 0;
   if (tipPercent === 'custom') {
@@ -138,10 +158,11 @@ export const CheckoutModal: React.FC = () => {
 
     const retailPrice = prod.retailPrice || Number((prod.costPrice * 1.8).toFixed(2));
 
+    const itemId = 'item-' + Date.now() + Math.random();
     setLineItems(prev => [
       ...prev,
       {
-        id: 'item-' + Date.now() + Math.random(),
+        id: itemId,
         type: 'product',
         name: prod.name,
         quantity: 1,
@@ -149,9 +170,8 @@ export const CheckoutModal: React.FC = () => {
         total: retailPrice
       }
     ]);
-
-    // Automatically decrement stock for this retail item
-    adjustInventoryStock(prod.id, -1);
+    // Stock is reduced only when the payment is completed
+    setProductIds(prev => ({ ...prev, [itemId]: prod.id }));
     setSelectedProductToAdd('');
   };
 
@@ -163,8 +183,12 @@ export const CheckoutModal: React.FC = () => {
     e.preventDefault();
     if (lineItems.length === 0) return;
 
-    const clientName = currentClient ? currentClient.name : guestName || 'Walk-in Guest';
-    const clientPhone = currentClient ? currentClient.phone : guestPhone || '+1 (305) 555-0000';
+    const clientName = currentClient
+      ? currentClient.name
+      : guestName.trim() || checkoutAppointment?.clientName || 'Walk-in Guest';
+    const clientPhone = currentClient
+      ? currentClient.phone
+      : guestPhone.trim() || checkoutAppointment?.clientPhone || '';
     const clientEmail = currentClient ? currentClient.email : undefined;
 
     const created = createInvoice({
@@ -173,9 +197,9 @@ export const CheckoutModal: React.FC = () => {
       clientName,
       clientPhone,
       clientEmail,
-      barberId: currentBarber.id,
-      barberName: currentBarber.name,
-      chairNumber: currentBarber.chairNumber,
+      barberId: currentBarber?.id ?? '',
+      barberName: currentBarber?.name ?? '',
+      chairNumber: currentBarber?.chairNumber ?? chairNumber,
       items: lineItems,
       subtotal,
       taxAmount,
@@ -183,16 +207,24 @@ export const CheckoutModal: React.FC = () => {
       discountAmount,
       totalAmount,
       paymentMethod,
+      // Payments are recorded by hand: no card processor is connected, so no card details are invented
       paymentDetails: {
-        cardBrand: paymentMethod === 'apple_pay' ? 'Apple Pay' : paymentMethod === 'card' ? 'Visa' : 'Cash',
-        cardLast4: paymentMethod === 'cash' ? undefined : '4242',
-        transactionRef: `tx_live_${Math.random().toString(36).substring(2, 9)}`,
+        cardBrand: paymentMethod === 'apple_pay' ? 'Apple Pay' : paymentMethod === 'card' ? 'Card' : 'Cash',
+        cardLast4: undefined,
+        transactionRef: `pos_${Math.random().toString(36).substring(2, 9)}`,
       },
       status: 'paid',
       notes: notes || (checkoutAppointment ? `Settled from appointment ${checkoutAppointment.id}` : 'Direct POS checkout'),
       receiptSentVia: sendReceiptViaSms ? 'sms' : 'none'
     });
 
+    // Reduce stock for retail items only now that the sale is paid
+    lineItems.forEach((item) => {
+      const productId = productIds[item.id];
+      if (item.type === 'product' && productId) adjustInventoryStock(productId, -item.quantity);
+    });
+
+    resetForm();
     setIsCheckoutModalOpen(false);
     setCheckoutAppointment(null);
     setSelectedInvoice(created);
@@ -202,7 +234,7 @@ export const CheckoutModal: React.FC = () => {
   return (
     <div 
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150"
-      onClick={() => setIsCheckoutModalOpen(false)}
+      onClick={handleClose}
     >
       <div 
         className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-100 flex flex-col max-h-[92vh]"
@@ -222,7 +254,7 @@ export const CheckoutModal: React.FC = () => {
             </div>
           </div>
           <button
-            onClick={() => setIsCheckoutModalOpen(false)}
+            onClick={handleClose}
             className="p-2 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
           >
             <X className="w-4 h-4" />
@@ -527,7 +559,7 @@ export const CheckoutModal: React.FC = () => {
               <span>${subtotal.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-zinc-400">
-              <span>Sales Tax (7.0%):</span>
+              <span>Sales Tax ({taxRate}%):</span>
               <span>${taxAmount.toFixed(2)}</span>
             </div>
             <div className="flex justify-between text-emerald-400">

@@ -8,6 +8,7 @@ export const SettingsView: React.FC = () => {
   const [salonName, setSalonName] = useState('');
   const [location, setLocation] = useState('');
   const [revenueGoal, setRevenueGoalInput] = useState('');
+  const [taxRate, setTaxRate] = useState('0');
   const [operatingHours, setOperatingHours] = useState('');
   const [senderId, setSenderId] = useState('');
   const [whatsappActive, setWhatsappActive] = useState(false);
@@ -19,6 +20,7 @@ export const SettingsView: React.FC = () => {
     setSalonName(shop?.name ?? '');
     setLocation(shop?.location ?? '');
     setRevenueGoalInput(shop && shop.revenueGoal > 0 ? String(shop.revenueGoal) : '');
+    setTaxRate(String(shop?.taxRate ?? 0));
     setOperatingHours(shop?.operatingHours ?? '');
     setSenderId(shop?.smsSenderId ?? '');
     setWhatsappActive(shop?.whatsappEnabled ?? false);
@@ -32,6 +34,7 @@ export const SettingsView: React.FC = () => {
   const handleSave = (e: React.FormEvent) => {
     e.preventDefault();
     const goal = Number(revenueGoal.replace(/[^0-9.]/g, ''));
+    const tax = Number(taxRate);
 
     updateShopSettings({
       name: salonName.trim() || 'My Salon',
@@ -39,6 +42,7 @@ export const SettingsView: React.FC = () => {
       operatingHours: operatingHours.trim(),
       smsSenderId: senderId.trim(),
       whatsappEnabled: whatsappActive,
+      ...(Number.isFinite(tax) && tax >= 0 && tax <= 100 ? { taxRate: tax } : {}),
       // An empty or zero goal keeps the previous one instead of erasing it.
       ...(Number.isFinite(goal) && goal > 0 ? { revenueGoal: goal } : {})
     });
@@ -119,6 +123,22 @@ export const SettingsView: React.FC = () => {
             />
             <span className="text-[10px] text-slate-400 mt-1 block">
               Shown on the Dashboard and the sidebar goal card
+            </span>
+          </div>
+
+          <div>
+            <label className="text-xs font-bold text-slate-900 block mb-1">Sales Tax Rate (%)</label>
+            <input
+              type="number"
+              min="0"
+              max="100"
+              step="any"
+              value={taxRate}
+              onChange={(e) => edit(setTaxRate)(e.target.value)}
+              className="w-full text-xs px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl font-mono"
+            />
+            <span className="text-[10px] text-slate-400 mt-1 block">
+              Added to every checkout. Use 0 if you do not charge tax.
             </span>
           </div>
         </div>
