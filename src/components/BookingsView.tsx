@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
 import { AppointmentStatus } from '../types';
+import { todayStr } from '../utils/metrics';
 
 export const BookingsView: React.FC = () => {
   const { 
@@ -23,17 +24,38 @@ export const BookingsView: React.FC = () => {
     setIsBookingModalOpen,
     setSelectedClient,
     clients,
-    sendSimulatedReminder 
+    sendSimulatedReminder,
+    activeTab,
+    invoices,
+    setCheckoutAppointment,
+    setIsCheckoutModalOpen
   } = useSalon();
 
   const [selectedChair, setSelectedChair] = useState<number | 'all'>('all');
   const [selectedStatus, setSelectedStatus] = useState<string>('all');
 
-  const filteredAppointments = appointments.filter((apt) => {
-    const matchesChair = selectedChair === 'all' || apt.chairNumber === selectedChair;
-    const matchesStatus = selectedStatus === 'all' || apt.status === selectedStatus;
-    return matchesChair && matchesStatus;
-  });
+  const today = todayStr();
+  const isTodayTab = activeTab === 'today';
+  const todayCount = appointments.filter((a) => a.date === today).length;
+
+  const filteredAppointments = appointments
+    .filter((apt) => {
+      const matchesDate = !isTodayTab || apt.date === today;
+      const matchesChair = selectedChair === 'all' || apt.chairNumber === selectedChair;
+      const matchesStatus = selectedStatus === 'all' || apt.status === selectedStatus;
+      return matchesDate && matchesChair && matchesStatus;
+    })
+    .sort((a, b) => {
+      const ka = `${a.date} ${a.time}`;
+      const kb = `${b.date} ${b.time}`;
+      // Today: earliest first. Other tabs: latest first.
+      return isTodayTab ? ka.localeCompare(kb) : kb.localeCompare(ka);
+    });
+
+  const openCheckout = (apt: (typeof appointments)[number]) => {
+    setCheckoutAppointment(apt);
+    setIsCheckoutModalOpen(true);
+  };
 
   const getStatusBadge = (status: AppointmentStatus) => {
     switch (status) {
@@ -63,6 +85,18 @@ export const BookingsView: React.FC = () => {
             Completed
           </span>
         );
+      case 'cancelled':
+        return (
+          <span className="px-2.5 py-1 bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] rounded-full uppercase tracking-wider">
+            Cancelled
+          </span>
+        );
+      case 'no_show':
+        return (
+          <span className="px-2.5 py-1 bg-rose-50 text-rose-600 border border-rose-200 font-bold text-[10px] rounded-full uppercase tracking-wider">
+            No-show
+          </span>
+        );
       case 'scheduled':
       default:
         return (
@@ -80,9 +114,11 @@ export const BookingsView: React.FC = () => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-2xs">
         <div>
           <div className="flex items-center gap-2">
-            <h2 className="text-xl font-bold text-slate-900">Chair & Booking Management</h2>
+            <h2 className="text-xl font-bold text-slate-900">
+              {isTodayTab ? "Today's Schedule" : 'Chair & Booking Management'}
+            </h2>
             <span className="px-2.5 py-0.5 bg-slate-100 text-slate-600 rounded-full text-xs font-mono font-semibold">
-              {appointments.length} Total Bookings
+              {isTodayTab ? `${todayCount} Today` : `${appointments.length} Total Bookings`}
             </span>
           </div>
           <p className="text-xs text-slate-400 mt-1">
@@ -111,7 +147,7 @@ export const BookingsView: React.FC = () => {
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            All Chairs (5)
+            All Chairs ({barbers.length})
           </button>
           {barbers.map((b) => (
             <button
@@ -131,7 +167,7 @@ export const BookingsView: React.FC = () => {
 
         {/* Status Filter */}
         <div className="flex items-center gap-1 bg-white p-1 rounded-2xl border border-slate-200/80 text-xs">
-          {['all', 'in_chair', 'arrived', 'confirmed', 'scheduled', 'completed'].map((status) => (
+          {['all', 'in_chair', 'arrived', 'confirmed', 'scheduled', 'completed', 'cancelled', 'no_show'].map((status) => (
             <button
               key={status}
               onClick={() => setSelectedStatus(status)}
@@ -141,7 +177,7 @@ export const BookingsView: React.FC = () => {
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              {status === 'in_chair' ? 'In Chair' : status}
+              {status === 'in_chair' ? 'In Chair' : status === 'no_show' ? 'No-show' : status}
             </button>
           ))}
         </div>
@@ -158,6 +194,7 @@ export const BookingsView: React.FC = () => {
         ) : (
           filteredAppointments.map((apt) => {
             const client = clients.find(c => c.id === apt.clientId);
+            const isPaid = invoices.some((i) => i.appointmentId === apt.id && i.status === 'paid');
             return (
               <div
                 key={apt.id}
@@ -233,6 +270,22 @@ export const BookingsView: React.FC = () => {
                   </span>
 
                   <div className="flex items-center gap-1.5">
+                    {(apt.status === 'scheduled' || apt.status === 'confirmed') && (
+                      <button
+                        onClick={() => updateAppointmentStatus(apt.id, 'cancelled')}
+                        className="px-2 py-1 text-rose-600 hover:bg-rose-50 text-xs font-medium rounded-lg transition-colors"
+                      >
+                        Cancel
+                      </button>
+                    )}
+                    {apt.status === 'confirmed' && (
+                      <button
+                        onClick={() => updateAppointmentStatus(apt.id, 'no_show')}
+                        className="px-2 py-1 text-slate-500 hover:bg-slate-100 text-xs font-medium rounded-lg transition-colors"
+                      >
+                        No-show
+                      </button>
+                    )}
                     {apt.status === 'scheduled' && (
                       <button
                         onClick={() => updateAppointmentStatus(apt.id, 'confirmed')}
@@ -259,17 +312,25 @@ export const BookingsView: React.FC = () => {
                     )}
                     {apt.status === 'in_chair' && (
                       <button
-                        onClick={() => updateAppointmentStatus(apt.id, 'completed')}
+                        onClick={() => openCheckout(apt)}
                         className="px-3 py-1 bg-black hover:bg-slate-800 text-white text-xs font-bold rounded-lg transition-colors shadow-2xs"
                       >
-                        Complete & Checkout
+                        Checkout
                       </button>
                     )}
-                    {apt.status === 'completed' && (
+                    {apt.status === 'completed' && isPaid && (
                       <span className="text-xs font-bold text-emerald-600 flex items-center gap-1">
                         <CheckCircle2 className="w-3.5 h-3.5" />
                         Paid & Logged
                       </span>
+                    )}
+                    {apt.status === 'completed' && !isPaid && (
+                      <button
+                        onClick={() => openCheckout(apt)}
+                        className="px-3 py-1 bg-amber-100 hover:bg-amber-200 text-amber-800 text-xs font-bold rounded-lg transition-colors"
+                      >
+                        Unpaid · Create invoice
+                      </button>
                     )}
                   </div>
                 </div>
