@@ -24,6 +24,8 @@ import { CheckoutModal } from './components/CheckoutModal';
 import { ReceiptModal } from './components/ReceiptModal';
 import { CommandPalette } from './components/CommandPalette';
 import { NotificationToast } from './components/NotificationToast';
+import { AuthProvider } from './context/AuthContext';
+import { AuthGate } from './components/AuthGate';
 class ErrorBoundary extends React.Component<
   { children: React.ReactNode },
   { error: Error | null }
@@ -108,10 +110,14 @@ const MainContent: React.FC = () => {
 
 export default function App() {
   return (
-    <SalonProvider>
-  <ErrorBoundary>
-    <MainContent />
-  </ErrorBoundary>
-</SalonProvider>
+    <AuthProvider>
+      <AuthGate>
+        <SalonProvider>
+          <ErrorBoundary>
+            <MainContent />
+          </ErrorBoundary>
+        </SalonProvider>
+      </AuthGate>
+    </AuthProvider>
   );
 }
