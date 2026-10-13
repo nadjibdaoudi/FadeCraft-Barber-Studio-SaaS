@@ -24,6 +24,18 @@ const ROLE_PROMPTS: Record<string, string> = {
 
 type ChatMessage = { role: string; content: string };
 
+// Turn an untrusted value into a short list of short strings
+const toList = (value: unknown, maxItems: number, maxLen = 160): string[] =>
+  Array.isArray(value)
+    ? value
+        .filter((v) => typeof v === 'string')
+        .slice(0, maxItems)
+        .map((v: string) => v.slice(0, maxLen))
+    : [];
+
+const section = (title: string, items: string[], emptyText: string): string =>
+  items.length > 0 ? `${title}:\n${items.map((i) => `  - ${i}`).join('\n')}` : `${title}: ${emptyText}`;
+
 const reply = (res: any, content: string, modelUsed: string) =>
   res.status(200).json({ content, modelUsed });
 
@@ -80,12 +92,21 @@ export default async function handler(req: any, res: any) {
   const systemText = [
     ROLE_PROMPTS[role],
     'Reply in the same language the user writes in. Keep answers short unless asked for detail.',
-    'Live salon data (use it, and never invent numbers that are not here):',
+    'Live salon data (use it, and never invent numbers that are not here).',
+    'If a list below is empty, say that nothing is recorded yet. Never claim things are fine, well-stocked or on track when there is simply no data.',
     `- Walk-ins waiting: ${Number(ctx.walkInCount) || 0}`,
     `- Low-stock items: ${Number(ctx.lowStockCount) || 0}`,
     `- Barbers: ${Number(ctx.totalBarbers) || 0}`,
     `- Appointments on record: ${Number(ctx.appointmentsCount) || 0}`,
-    `- Barber status: ${typeof ctx.activeBarbers === 'string' && ctx.activeBarbers ? ctx.activeBarbers.slice(0, 600) : 'none'}`
+    `- Barber status: ${typeof ctx.activeBarbers === 'string' && ctx.activeBarbers ? ctx.activeBarbers.slice(0, 600) : 'none'}`,
+    section(
+      `Inventory (${Number(ctx.inventoryItemCount) || 0} items recorded)`,
+      toList(ctx.inventory, 30),
+      'no inventory items are recorded yet'
+    ),
+    section('Services', toList(ctx.services, 20), 'no services are recorded yet'),
+    section("Today's appointments", toList(ctx.todayAppointments, 15), 'none today'),
+    section('Walk-ins waiting', toList(ctx.waitingWalkIns, 10), 'nobody is waiting')
   ].join('\n');
 
   const controller = new AbortController();
