@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { useAuth } from './AuthContext';
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import {
   Appointment,
@@ -548,7 +549,11 @@ const mapShop = (r: Row): ShopSettings => ({
 // ---------------------------------------------------------------------
 
 export const SalonProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [activeTab, setActiveTab] = useState<string>('dashboard');
+  const { role } = useAuth();
+  const [requestedTab, setActiveTab] = useState<string>('dashboard');
+  // Staff accounts cannot open these pages, even through the command palette
+  const activeTab =
+    role === 'staff' && (requestedTab === 'analytics' || requestedTab === 'settings') ? 'dashboard' : requestedTab;
 
   // Data (loaded from Supabase)
   const [barbers, setBarbers] = useState<Barber[]>([]);
