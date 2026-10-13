@@ -10,6 +10,7 @@ import {
   TrendingUp, 
   Sparkles, 
   Settings, 
+  LogOut,
   Search,
   Scissors,
   ChevronDown,
@@ -18,6 +19,7 @@ import {
   Receipt
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
+import { useAuth } from '../context/AuthContext';
 import { formatMoney, formatMoneyShort, revenueBetween, todayStr } from '../utils/metrics';
 
 export const Sidebar: React.FC = () => {
@@ -36,6 +38,7 @@ export const Sidebar: React.FC = () => {
   } = useSalon();
 
   const totalClients = clients.length;
+  const { isOwner, role, user, signOut } = useAuth();
   const today = todayStr();
   const year = new Date().getFullYear();
   const todayAppointments = appointments.filter(a => a.date === today && a.status !== 'cancelled').length;
@@ -72,7 +75,7 @@ export const Sidebar: React.FC = () => {
     { id: 'inventory', label: 'Supplies & Inventory', icon: Package, badge: lowStockCount > 0 ? `${lowStockCount} low` : undefined, badgeAlert: lowStockCount > 0 },
     { id: 'analytics', label: 'Analytics', icon: TrendingUp },
     { id: 'automations', label: 'Automations', icon: Sparkles, badgeDot: true },
-  ];
+  ].filter(item => isOwner || item.id !== 'analytics');
 
   return (
     <aside className="w-[260px] h-screen bg-[#F8F9FA] border-r border-[#E2E8F0] flex flex-col justify-between p-4 shrink-0 select-none">
@@ -186,7 +189,8 @@ export const Sidebar: React.FC = () => {
           </nav>
         </div>
 
-        {/* SYSTEM SECTION */}
+        {/* SYSTEM SECTION (owner only) */}
+        {isOwner && (
         <div className="flex flex-col gap-1">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 px-3 py-1">
             System
@@ -205,9 +209,11 @@ export const Sidebar: React.FC = () => {
             </div>
           </button>
         </div>
+        )}
       </div>
 
-      {/* Bottom Goal Widget */}
+      <div className="flex flex-col gap-3">
+        {isOwner && (
       <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex flex-col gap-2">
         <div className="flex items-center justify-between text-xs font-medium">
           <span className="text-slate-500">{year} Revenue Goal</span>
@@ -229,6 +235,23 @@ export const Sidebar: React.FC = () => {
             ? `${formatMoney(Math.max(goal - yearRevenue, 0))} to go · ${upcomingCount} upcoming appts`
             : 'Set a goal from the Dashboard'}
         </span>
+      </div>
+        )}
+        <div className="flex items-center justify-between gap-2 px-1">
+          <div className="flex flex-col min-w-0">
+            <span className="text-[11px] font-semibold text-slate-700 truncate">{user?.email}</span>
+            <span className="text-[10px] text-slate-400 capitalize">{role}</span>
+          </div>
+          <button
+            type="button"
+            onClick={signOut}
+            title="Sign out"
+            aria-label="Sign out"
+            className="p-2 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/60 transition-colors"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
       </div>
     </aside>
   );
