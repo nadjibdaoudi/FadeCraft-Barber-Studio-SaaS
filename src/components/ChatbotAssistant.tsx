@@ -18,6 +18,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
+import { supabase } from '../supabaseClient';
 import { todayStr } from '../utils/metrics';
 
 export interface ChatMessage {
@@ -143,9 +144,15 @@ How can I assist you today?`,
           .map(w => `${w.clientName}: ${w.serviceName}, about ${w.estimatedWaitMinutes} min wait`)
       };
 
+      const { data: authData } = await supabase.auth.getSession();
+      const accessToken = authData.session?.access_token ?? '';
+
       const response = await fetch('/api/chat', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${accessToken}`
+        },
         body: JSON.stringify({
           messages: newMessages.map(m => ({ role: m.role, content: m.content })),
           role,
