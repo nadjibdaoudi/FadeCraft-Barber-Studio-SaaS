@@ -18,6 +18,7 @@ import {
   MessageSquare
 } from 'lucide-react';
 import { useSalon } from '../context/SalonContext';
+import { todayStr } from '../utils/metrics';
 
 export interface ChatMessage {
   id: string;
@@ -93,8 +94,8 @@ How can I assist you today?`,
       model: 'gemini-3.8-flash'
     },
     {
-      label: 'Revenue & Turnaround Analysis',
-      prompt: 'Analyze our chair turnaround pace (34m 12s) and suggest 3 ways to reach our $240k annual goal faster.',
+      label: 'Revenue & Utilization Analysis',
+      prompt: 'Using only the salon data you have, suggest 3 ways to grow revenue and improve chair utilization. Say what data is missing.',
       role: 'strategist' as AssistantRole,
       model: 'gemini-3.8-flash'
     }
@@ -118,12 +119,28 @@ How can I assist you today?`,
 
     try {
       // Package live salon context for the Gemini assistant
+      const today = todayStr();
       const salonContext = {
         walkInCount: walkIns.length,
         lowStockCount,
         totalBarbers: barbers.length,
         appointmentsCount: appointments.length,
-        activeBarbers: barbers.map(b => `${b.name} (Chair #${b.chairNumber} - ${b.status})`).join(', ')
+        activeBarbers: barbers.map(b => `${b.name} (Chair #${b.chairNumber} - ${b.status})`).join(', '),
+        inventoryItemCount: inventory.length,
+        inventory: inventory
+          .slice(0, 30)
+          .map(i => `${i.name}: ${i.currentStock} ${i.unit} (minimum ${i.minStockThreshold})`),
+        services: services
+          .slice(0, 20)
+          .map(s => `${s.name}: $${s.price}, ${s.durationMinutes} min`),
+        todayAppointments: appointments
+          .filter(a => a.date === today && a.status !== 'cancelled')
+          .sort((a, b) => a.time.localeCompare(b.time))
+          .slice(0, 15)
+          .map(a => `${a.time} ${a.clientName}: ${a.serviceName} with ${a.barberName || 'unassigned'} (${a.status})`),
+        waitingWalkIns: walkIns
+          .slice(0, 10)
+          .map(w => `${w.clientName}: ${w.serviceName}, about ${w.estimatedWaitMinutes} min wait`)
       };
 
       const response = await fetch('/api/chat', {
