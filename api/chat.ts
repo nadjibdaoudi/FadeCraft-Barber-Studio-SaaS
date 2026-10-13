@@ -36,6 +36,24 @@ const toList = (value: unknown, maxItems: number, maxLen = 160): string[] =>
 const section = (title: string, items: string[], emptyText: string): string =>
   items.length > 0 ? `${title}:\n${items.map((i) => `  - ${i}`).join('\n')}` : `${title}: ${emptyText}`;
 
+// True only for a signed-in user who belongs to a salon (checked with the user's own token,
+// so the database rules decide: an outsider gets no row back).
+async function isSalonMember(token: string): Promise<boolean> {
+  const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
+  const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
+  if (!supabaseUrl || !supabaseAnonKey || !token) return false;
+  try {
+    const r = await fetch(`${supabaseUrl}/rest/v1/shop_members?select=role&limit=1`, {
+      headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` }
+    });
+    if (!r.ok) return false;
+    const rows = await r.json();
+    return Array.isArray(rows) && rows.length > 0;
+  } catch {
+    return false;
+  }
+}
+
 const reply = (res: any, content: string, modelUsed: string) =>
   res.status(200).json({ content, modelUsed });
 
@@ -43,6 +61,12 @@ export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
     return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  const authHeader = typeof req.headers?.authorization === 'string' ? req.headers.authorization : '';
+  const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+  if (!(await isSalonMember(token))) {
+    return res.status(401).json({ error: 'Sign in required' });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
