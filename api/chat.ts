@@ -36,23 +36,35 @@ const toList = (value: unknown, maxItems: number, maxLen = 160): string[] =>
 const section = (title: string, items: string[], emptyText: string): string =>
   items.length > 0 ? `${title}:\n${items.map((i) => `  - ${i}`).join('\n')}` : `${title}: ${emptyText}`;
 
-// True only for a signed-in user who belongs to a salon (checked with the user's own token,
-// so the database rules decide: an outsider gets no row back).
-async function isSalonMember(token: string): Promise<boolean> {
+type MemberCheck = 'ok' | 'no_token' | 'no_config' | 'bad_token' | 'no_salon' | 'unreachable';
+
+// Checks, with the user's own token, that this is a signed-in user who belongs to a salon.
+// The database rules decide: an outsider gets no row back.
+async function checkMember(token: string): Promise<MemberCheck> {
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_ANON_KEY;
-  if (!supabaseUrl || !supabaseAnonKey || !token) return false;
+  if (!supabaseUrl || !supabaseAnonKey) return 'no_config';
+  if (!token) return 'no_token';
   try {
     const r = await fetch(`${supabaseUrl}/rest/v1/shop_members?select=role&limit=1`, {
       headers: { apikey: supabaseAnonKey, Authorization: `Bearer ${token}` }
     });
-    if (!r.ok) return false;
+    if (r.status === 401 || r.status === 403) return 'bad_token';
+    if (!r.ok) return 'unreachable';
     const rows = await r.json();
-    return Array.isArray(rows) && rows.length > 0;
+    return Array.isArray(rows) && rows.length > 0 ? 'ok' : 'no_salon';
   } catch {
-    return false;
+    return 'unreachable';
   }
 }
+
+const AUTH_ERRORS: Record<Exclude<MemberCheck, 'ok'>, { status: number; error: string }> = {
+  no_token: { status: 401, error: 'No sign-in token was sent. Reload the page and sign in again.' },
+  no_config: { status: 500, error: 'The server is missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY.' },
+  bad_token: { status: 401, error: 'Your sign-in session is invalid or expired. Sign out and sign in again.' },
+  no_salon: { status: 403, error: 'Your account is not linked to a salon.' },
+  unreachable: { status: 502, error: 'Could not verify your account with the database.' }
+};
 
 const reply = (res: any, content: string, modelUsed: string) =>
   res.status(200).json({ content, modelUsed });
@@ -65,8 +77,10 @@ export default async function handler(req: any, res: any) {
 
   const authHeader = typeof req.headers?.authorization === 'string' ? req.headers.authorization : '';
   const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-  if (!(await isSalonMember(token))) {
-    return res.status(401).json({ error: 'Sign in required' });
+  const check = await checkMember(token);
+  if (check !== 'ok') {
+    const failure = AUTH_ERRORS[check];
+    return res.status(failure.status).json({ error: failure.error });
   }
 
   const apiKey = process.env.GEMINI_API_KEY;
