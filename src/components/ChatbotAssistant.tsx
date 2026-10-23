@@ -162,7 +162,14 @@ How can I assist you today?`,
       });
 
       if (!response.ok) {
-        throw new Error(`Server responded with status ${response.status}`);
+        let detail = '';
+        try {
+          const failure = await response.json();
+          if (failure && typeof failure.error === 'string') detail = failure.error;
+        } catch {
+          // the server sent no readable body
+        }
+        throw new Error(`Server responded with status ${response.status}${detail ? ': ' + detail : ''}`);
       }
 
       const data = await response.json();
