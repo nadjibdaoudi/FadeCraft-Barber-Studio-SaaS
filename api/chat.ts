@@ -69,6 +69,60 @@ const AUTH_ERRORS: Record<Exclude<MemberCheck, 'ok'>, { status: number; error: s
 const reply = (res: any, content: string, modelUsed: string) =>
   res.status(200).json({ content, modelUsed });
 
+type GeminiResult =
+  | { ok: true; text: string }
+  | { ok: false; kind: 'timeout' | 'network' | 'http' | 'blocked' | 'empty'; status?: number; detail?: string };
+
+// One call to Gemini with its own time limit. Never throws.
+async function callGemini(
+  model: string,
+  apiKey: string,
+  systemText: string,
+  contents: unknown[],
+  timeoutMs: number
+): Promise<GeminiResult> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const upstream = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
+        body: JSON.stringify({
+          systemInstruction: { parts: [{ text: systemText }] },
+          contents,
+          generationConfig: { maxOutputTokens: 800, temperature: 0.7 }
+        }),
+        signal: controller.signal
+      }
+    );
+
+    const data: any = await upstream.json().catch(() => ({}));
+
+    if (!upstream.ok) {
+      return { ok: false, kind: 'http', status: upstream.status, detail: data?.error?.message || `HTTP ${upstream.status}` };
+    }
+
+    const text = (data?.candidates?.[0]?.content?.parts ?? [])
+      .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
+      .join('')
+      .trim();
+
+    if (!text) {
+      const blocked = data?.promptFeedback?.blockReason;
+      return blocked ? { ok: false, kind: 'blocked', detail: String(blocked) } : { ok: false, kind: 'empty' };
+    }
+
+    return { ok: true, text };
+  } catch (err: any) {
+    return { ok: false, kind: err?.name === 'AbortError' ? 'timeout' : 'network', detail: err?.message };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export default async function handler(req: any, res: any) {
   if (req.method !== 'POST') {
     res.setHeader('Allow', 'POST');
@@ -147,56 +201,38 @@ export default async function handler(req: any, res: any) {
     section('Walk-ins waiting', toList(ctx.waitingWalkIns, 10), 'nobody is waiting')
   ].join('\n');
 
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 20000);
+  // Try the requested model first. If it is slow or unavailable, try the other one once.
+  const order = process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : [model, ...ALLOWED_MODELS.filter((m) => m !== model)];
+  const primaryMs = Number(process.env.CHAT_TIMEOUT_MS) || 25000;
+  const tried: string[] = [];
+  let lastModel = model;
+  let failure: Extract<GeminiResult, { ok: false }> = { ok: false, kind: 'empty' };
 
-  try {
-    const upstream = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': apiKey },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: systemText }] },
-          contents,
-          generationConfig: { maxOutputTokens: 800, temperature: 0.7 }
-        }),
-        signal: controller.signal
-      }
-    );
+  for (let i = 0; i < order.length; i++) {
+    const current = order[i];
+    const result = await callGemini(current, apiKey, systemText, contents, i === 0 ? primaryMs : Math.round(primaryMs * 0.8));
+    if (result.ok) return reply(res, result.text, current);
 
-    const data: any = await upstream.json().catch(() => ({}));
+    console.error('Gemini failed:', current, result.kind, result.status ?? '', result.detail ?? '');
+    tried.push(current);
+    lastModel = current;
+    failure = result;
 
-    if (!upstream.ok) {
-      const detail = data?.error?.message || `HTTP ${upstream.status}`;
-      console.error('Gemini error:', upstream.status, detail);
-      return reply(res, `The AI provider returned an error (${upstream.status}): ${detail}`, model);
-    }
-
-    const text = (data?.candidates?.[0]?.content?.parts ?? [])
-      .map((p: any) => (typeof p?.text === 'string' ? p.text : ''))
-      .join('')
-      .trim();
-
-    if (!text) {
-      const blocked = data?.promptFeedback?.blockReason;
-      return reply(
-        res,
-        blocked ? `The AI could not answer this request (${blocked}).` : 'The AI returned an empty answer. Please try again.',
-        model
-      );
-    }
-
-    return reply(res, text, model);
-  } catch (err: any) {
-    console.error('Chat function failed:', err);
-    const timedOut = err?.name === 'AbortError';
-    return reply(
-      res,
-      timedOut ? 'The AI took too long to answer. Please try again.' : 'Could not reach the AI provider. Please try again.',
-      model
-    );
-  } finally {
-    clearTimeout(timer);
+    // A different model cannot fix a bad key, a bad request or a blocked prompt
+    if (result.kind === 'blocked') break;
+    if (result.kind === 'http' && [400, 401, 403].includes(result.status ?? 0)) break;
   }
+
+  const message =
+    failure.kind === 'timeout'
+      ? `The AI took too long to answer (tried: ${tried.join(', ')}). Please try again.`
+      : failure.kind === 'network'
+        ? `Could not reach the AI provider (tried: ${tried.join(', ')}). Please try again.`
+        : failure.kind === 'http'
+          ? `The AI provider returned an error (${failure.status}) from ${lastModel}: ${failure.detail}`
+          : failure.kind === 'blocked'
+            ? `The AI could not answer this request (${failure.detail}).`
+            : 'The AI returned an empty answer. Please try again.';
+
+  return reply(res, message, lastModel);
 }
